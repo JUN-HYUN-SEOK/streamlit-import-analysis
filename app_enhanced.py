@@ -230,7 +230,7 @@ def create_eight_percent_refund_analysis(df):
             '수입신고번호', 'B/L번호', '세번부호', '세율구분', '세율설명',
             '관세실행세율', '규격1', '규격2', '규격3', '성분1', '성분2', '성분3',
             '실제관세액', '결제방법', '결제통화단위', '거래품명', '란번호', '행번호',
-            '수량_1', '수량단위_1', '단가', '금액'
+            '수량_1', '수량단위_1', '단가', '금액', '수리일자'
         ]
         
         # 존재하는 컬럼만 선택
@@ -310,7 +310,7 @@ def create_zero_percent_risk_analysis(df):
         selected_columns = [
             '수입신고번호', 'B/L번호', '세번부호', '세율구분', '관세실행세율',
             '규격1', '규격2', '성분1', '실제관세액', '거래품명', '란번호', '행번호',
-            '수량_1', '수량단위_1', '단가', '금액'
+            '수량_1', '수량단위_1', '단가', '금액', '수리일자'
         ]
         
         # 존재하는 컬럼만 선택
@@ -483,8 +483,8 @@ def create_price_risk_analysis(df):
         st.info("동일 조건에서 단가 편차가 큰 경우를 찾습니다.")
         
         # 필요한 컬럼 체크
-        required_columns = ['규격1', '세번부호', '거래구분', '결제방법', '수리일자', 
-                          '단가', '수입신고번호', '결제통화단위', '거래품명', 
+        required_columns = ['수입신고번호', '규격1', '세번부호', '거래구분', '결제방법', '수리일자', 
+                          '단가', '결제통화단위', '거래품명', 
                           '란번호', '행번호', '수량_1', '수량단위_1', '금액']
         
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -511,8 +511,8 @@ def create_price_risk_analysis(df):
         # 그룹화 기준 선택
         group_columns = st.multiselect(
             "그룹화 기준을 선택하세요:",
-            ['규격1', '세번부호', '거래구분', '결제방법'],
-            default=['규격1', '세번부호']
+            ['규격1', '세번부호', '거래구분', '결제방법', '결제통화단위'],
+            default=['규격1', '세번부호', '결제통화단위']
         )
         
         if not group_columns:
@@ -536,16 +536,32 @@ def create_price_risk_analysis(df):
         
         grouped = df_work.groupby(group_columns).agg(agg_dict).reset_index()
         
-        # 컬럼명 재설정
-        new_columns = group_columns + [
-            '평균단가', '최고단가', '최저단가', '단가표준편차', '데이터수',
-            'Min신고번호', 'Max신고번호', '결제통화단위'
-        ]
-        
-        for col in additional_cols:
-            if col in df_work.columns:
+        # 집계 후 실제 컬럼명에 맞춰 new_columns를 동적으로 생성
+        grouped_columns = list(grouped.columns)
+        new_columns = []
+        for col in grouped_columns:
+            # 다중 컬럼(튜플) 처리: ('단가', 'mean') 등
+            if isinstance(col, tuple):
+                if col[0] == '단가' and col[1] == 'mean':
+                    new_columns.append('평균단가')
+                elif col[0] == '단가' and col[1] == 'max':
+                    new_columns.append('최고단가')
+                elif col[0] == '단가' and col[1] == 'min':
+                    new_columns.append('최저단가')
+                elif col[0] == '단가' and col[1] == 'std':
+                    new_columns.append('단가표준편차')
+                elif col[0] == '단가' and col[1] == 'count':
+                    new_columns.append('데이터수')
+                elif col[0] == '수입신고번호' and col[1] == 'min':
+                    new_columns.append('Min신고번호')
+                elif col[0] == '수입신고번호' and col[1] == 'max':
+                    new_columns.append('Max신고번호')
+                elif col[0] == '결제통화단위' and col[1] == 'first':
+                    new_columns.append('결제통화단위')
+                else:
+                    new_columns.append(f'{col[0]}_{col[1]}')
+            else:
                 new_columns.append(col)
-        
         grouped.columns = new_columns
         
         # 위험도 계산 (원본과 동일)
@@ -641,26 +657,16 @@ def create_price_risk_analysis(df):
         st.write(f"**{selected_risk} 위험도 데이터: {len(display_data):,}건**")
         st.dataframe(display_data, use_container_width=True)
         
-        # 엑셀 다운로드
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            grouped.to_excel(writer, sheet_name='단가 Risk', index=False)
-            
-            # 위험도별 시트 생성
-            for risk_level in risk_counts.index:
-                risk_data = grouped[grouped['위험도'] == risk_level]
-                if len(risk_data) > 0:
-                    sheet_name = f'위험도_{risk_level}'[:31]  # 엑셀 시트명 길이 제한
-                    risk_data.to_excel(writer, sheet_name=sheet_name, index=False)
+        # '수입신고번호', '수리일자' 컬럼을 가장 왼쪽에 오도록 재정렬 (엑셀 저장용)
+        left_cols = []
+        if '수입신고번호' in grouped.columns:
+            left_cols.append('수입신고번호')
+        if '수리일자' in grouped.columns:
+            left_cols.append('수리일자')
+        other_cols = [col for col in grouped.columns if col not in left_cols]
+        grouped_for_excel = grouped[left_cols + other_cols]
         
-        st.download_button(
-            label="📥 단가 Risk 엑셀 다운로드",
-            data=excel_buffer.getvalue(),
-            file_name=f"단가리스크_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-        return grouped
+        return grouped_for_excel
         
     except Exception as e:
         st.error(f"❌ 단가 Risk 분석 중 오류: {str(e)}")
@@ -784,7 +790,37 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
             summary_data.append(['단가 Risk 그룹', len(price_risk_df)])
             
             summary_df = pd.DataFrame(summary_data, columns=['구분', '건수'])
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            summary_df.to_excel(writer, sheet_name='Summary', index=False, startrow=0)
+            
+            # 차트 데이터 추가
+            if '세율구분' in df.columns:
+                rate_counts = df['세율구분'].value_counts()
+                rate_df = pd.DataFrame({
+                    '세율구분': rate_counts.index,
+                    '건수': rate_counts.values
+                })
+                rate_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + 2)
+            
+            if '거래구분' in df.columns:
+                trade_counts = df['거래구분'].value_counts()
+                trade_df = pd.DataFrame({
+                    '거래구분': trade_counts.index,
+                    '건수': trade_counts.values
+                })
+                trade_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + len(rate_df) + 4)
+            
+            if '수리일자' in df.columns:
+                try:
+                    df['수리일자_converted'] = pd.to_datetime(df['수리일자'], errors='coerce')
+                    if df['수리일자_converted'].notna().sum() > 0:
+                        daily_counts = df.groupby(df['수리일자_converted'].dt.date).size()
+                        time_df = pd.DataFrame({
+                            '날짜': daily_counts.index,
+                            '건수': daily_counts.values
+                        })
+                        time_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + len(rate_df) + len(trade_df) + 6)
+                except:
+                    pass
             
             # 2. 8% 환급 검토 시트
             if len(eight_percent_df) > 0:
