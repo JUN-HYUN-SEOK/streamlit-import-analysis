@@ -7,7 +7,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
-from openpyxl.styles import Font
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.chart import PieChart, Reference, LineChart
 
 # 페이지 설정
 st.set_page_config(
@@ -782,7 +783,7 @@ def create_summary_analysis(df):
         return False
 
 def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff_risk_df, price_risk_df):
-    """종합 엑셀 리포트 생성 (원본과 동일한 다중 시트)"""
+    """종합 엑셀 리포트 생성 (보고서 스타일 + 차트 포함)"""
     try:
         output = io.BytesIO()
         
@@ -805,6 +806,7 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
             start_row = len(summary_data) + 2
             
             # 세율구분 분석
+            rate_df = None
             if '세율구분' in df.columns:
                 rate_counts = df['세율구분'].value_counts()
                 rate_df = pd.DataFrame({
@@ -813,9 +815,11 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                     '비율(%)': (rate_counts.values / len(df) * 100).round(1)
                 })
                 rate_df.to_excel(writer, sheet_name='Summary', index=False, startrow=start_row)
+                rate_start = start_row
                 start_row += len(rate_df) + 3
             
             # 거래구분 분석
+            trade_df = None
             if '거래구분' in df.columns:
                 trade_counts = df['거래구분'].value_counts()
                 trade_df = pd.DataFrame({
@@ -824,9 +828,11 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                     '비율(%)': (trade_counts.values / len(df) * 100).round(1)
                 })
                 trade_df.to_excel(writer, sheet_name='Summary', index=False, startrow=start_row)
+                trade_start = start_row
                 start_row += len(trade_df) + 3
             
             # 시계열 분석
+            time_df = None
             if '수리일자' in df.columns:
                 try:
                     df['수리일자_converted'] = pd.to_datetime(df['수리일자'], errors='coerce')
@@ -837,28 +843,39 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                             '건수': daily_counts.values
                         })
                         time_df.to_excel(writer, sheet_name='Summary', index=False, startrow=start_row)
+                        time_start = start_row
                 except:
                     pass
             
-            # openpyxl로 스타일 적용
+            # openpyxl로 스타일 및 차트 적용
             workbook = writer.book
             summary_sheet = workbook['Summary']
+            # 스타일
             title_font = Font(name='맑은 고딕', size=14, bold=True)
             header_font = Font(name='맑은 고딕', size=11, bold=True)
             normal_font = Font(name='맑은 고딕', size=10)
+            center = Alignment(horizontal='center', vertical='center')
+            bold = Font(bold=True)
+            fill = PatternFill(start_color='EAF1FB', end_color='EAF1FB', fill_type='solid')
+            border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
             # 제목
             summary_sheet['A1'].font = title_font
+            summary_sheet['A1'].alignment = center
             # 섹션 헤더
             summary_sheet['A3'].font = header_font
             # 표 헤더들
             for row in summary_sheet.iter_rows(min_row=4, max_row=4, min_col=1, max_col=2):
                 for cell in row:
                     cell.font = header_font
+                    cell.alignment = center
+                    cell.fill = fill
+                    cell.border = border
             # 데이터
             for row in summary_sheet.iter_rows(min_row=5, min_col=1, max_col=2):
                 for cell in row:
                     if cell.font != header_font:
                         cell.font = normal_font
+                        cell.border = border
             # 열 너비 자동 조정
             for column_cells in summary_sheet.columns:
                 max_length = 0
@@ -871,17 +888,49 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                         pass
                 adjusted_width = (max_length + 2)
                 summary_sheet.column_dimensions[column].width = adjusted_width
-            
-            # 2. 8% 환급 검토 시트
+            # 차트 추가
+            from openpyxl.utils import get_column_letter
+            chart_row_offset = 2
+            # 세율구분 파이차트
+            if rate_df is not None:
+                pie = PieChart()
+                pie.title = "세율구분별 비율"
+                data_ref = Reference(summary_sheet, min_col=2, min_row=rate_start+2, max_row=rate_start+1+len(rate_df))
+                labels_ref = Reference(summary_sheet, min_col=1, min_row=rate_start+2, max_row=rate_start+1+len(rate_df))
+                pie.add_data(data_ref, titles_from_data=False)
+                pie.set_categories(labels_ref)
+                pie.height = 7
+                pie.width = 7
+                summary_sheet.add_chart(pie, f"E{rate_start+2}")
+            # 거래구분 파이차트
+            if trade_df is not None:
+                pie2 = PieChart()
+                pie2.title = "거래구분별 비율"
+                data_ref = Reference(summary_sheet, min_col=2, min_row=trade_start+2, max_row=trade_start+1+len(trade_df))
+                labels_ref = Reference(summary_sheet, min_col=1, min_row=trade_start+2, max_row=trade_start+1+len(trade_df))
+                pie2.add_data(data_ref, titles_from_data=False)
+                pie2.set_categories(labels_ref)
+                pie2.height = 7
+                pie2.width = 7
+                summary_sheet.add_chart(pie2, f"E{trade_start+2}")
+            # 시계열 꺾은선그래프
+            if time_df is not None:
+                line = LineChart()
+                line.title = "일별 수입신고 건수"
+                data_ref = Reference(summary_sheet, min_col=2, min_row=time_start+2, max_row=time_start+1+len(time_df))
+                cats_ref = Reference(summary_sheet, min_col=1, min_row=time_start+2, max_row=time_start+1+len(time_df))
+                line.add_data(data_ref, titles_from_data=False)
+                line.set_categories(cats_ref)
+                line.height = 7
+                line.width = 14
+                summary_sheet.add_chart(line, f"E{time_start+2}")
+            # 이하 기존 시트 저장 로직 동일
             if len(eight_percent_df) > 0:
                 eight_percent_df.to_excel(writer, sheet_name='8% 환급 검토', index=False)
-            # 3. 0% Risk 시트
             if len(zero_risk_df) > 0:
                 zero_risk_df.to_excel(writer, sheet_name='0% Risk', index=False)
-            # 4. 세율 Risk 시트
             if len(tariff_risk_df) > 0:
                 tariff_risk_df.to_excel(writer, sheet_name='세율 Risk', index=False)
-            # 5. 단가 Risk 시트 - 수입신고번호를 A열로 이동
             if len(price_risk_df) > 0:
                 cols = price_risk_df.columns.tolist()
                 if '수입신고번호' in cols:
@@ -889,9 +938,7 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                     cols.insert(0, '수입신고번호')
                     price_risk_df = price_risk_df[cols]
                 price_risk_df.to_excel(writer, sheet_name='단가 Risk', index=False)
-            # 6. 전체 데이터 시트
             df.to_excel(writer, sheet_name='전체데이터', index=False)
-            # 7. 세율구분별 통계
             if '세율구분' in df.columns:
                 rate_stats = df.groupby('세율구분').agg({
                     '수입신고번호': 'nunique',
