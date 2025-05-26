@@ -36,7 +36,7 @@ with st.sidebar:
 # 파일 업로드
 uploaded_file = st.file_uploader(
     "분석할 엑셀 파일을 업로드하세요", 
-    type=["xlsx", "csv"],
+    type=["xlsx", "xls", "csv"],
     help="원본 app-new202505.py와 동일한 형식의 파일을 업로드하세요"
 )
 
