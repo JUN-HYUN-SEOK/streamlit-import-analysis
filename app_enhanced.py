@@ -7,6 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+from openpyxl.styles import Font
 
 # 페이지 설정
 st.set_page_config(
@@ -786,37 +787,100 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
         output = io.BytesIO()
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # 1. Summary 시트
-            summary_data = []
-            summary_data.append(['전체 데이터 건수', len(df)])
-            summary_data.append(['고유 신고번호 수', df['수입신고번호'].nunique() if '수입신고번호' in df.columns else 0])
-            summary_data.append(['8% 환급검토 대상', len(eight_percent_df)])
-            summary_data.append(['0% Risk 대상', len(zero_risk_df)])
-            summary_data.append(['세율 Risk 대상', len(tariff_risk_df)])
-            summary_data.append(['단가 Risk 그룹', len(price_risk_df)])
+            # 1. Summary 시트 - 업체 보고서 형식으로 개선
+            workbook = writer.book
+            summary_sheet = workbook.create_sheet('Summary')
             
-            summary_df = pd.DataFrame(summary_data, columns=['구분', '건수'])
-            summary_df.to_excel(writer, sheet_name='Summary', index=False, startrow=0)
+            # 제목 스타일 설정
+            title_font = Font(name='맑은 고딕', size=14, bold=True)
+            header_font = Font(name='맑은 고딕', size=11, bold=True)
+            normal_font = Font(name='맑은 고딕', size=10)
             
-            # 차트 데이터 추가
+            # 제목 추가
+            summary_sheet['A1'] = '수입신고 분석 보고서'
+            summary_sheet['A1'].font = title_font
+            
+            # 기본 정보 섹션
+            summary_sheet['A3'] = '1. 기본 분석 정보'
+            summary_sheet['A3'].font = header_font
+            
+            summary_data = [
+                ['전체 데이터 건수', len(df)],
+                ['고유 신고번호 수', df['수입신고번호'].nunique() if '수입신고번호' in df.columns else 0],
+                ['8% 환급검토 대상', len(eight_percent_df)],
+                ['0% Risk 대상', len(zero_risk_df)],
+                ['세율 Risk 대상', len(tariff_risk_df)],
+                ['단가 Risk 그룹', len(price_risk_df)]
+            ]
+            
+            for idx, (label, value) in enumerate(summary_data, start=4):
+                summary_sheet[f'A{idx}'] = label
+                summary_sheet[f'B{idx}'] = value
+                summary_sheet[f'A{idx}'].font = normal_font
+                summary_sheet[f'B{idx}'].font = normal_font
+            
+            # 세율구분 분석 섹션
             if '세율구분' in df.columns:
+                summary_sheet['A11'] = '2. 세율구분별 분석'
+                summary_sheet['A11'].font = header_font
+                
                 rate_counts = df['세율구분'].value_counts()
                 rate_df = pd.DataFrame({
                     '세율구분': rate_counts.index,
-                    '건수': rate_counts.values
+                    '건수': rate_counts.values,
+                    '비율': (rate_counts.values / len(df) * 100).round(1)
                 })
-                rate_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + 2)
+                
+                # 헤더 추가
+                for col, header in enumerate(['세율구분', '건수', '비율(%)'], start=0):
+                    cell = summary_sheet.cell(row=12, column=col+1)
+                    cell.value = header
+                    cell.font = header_font
+                
+                # 데이터 추가
+                for idx, row in enumerate(rate_df.itertuples(), start=13):
+                    summary_sheet[f'A{idx}'] = row.세율구분
+                    summary_sheet[f'B{idx}'] = row.건수
+                    summary_sheet[f'C{idx}'] = row.비율
+                    summary_sheet[f'A{idx}'].font = normal_font
+                    summary_sheet[f'B{idx}'].font = normal_font
+                    summary_sheet[f'C{idx}'].font = normal_font
             
+            # 거래구분 분석 섹션
             if '거래구분' in df.columns:
+                start_row = len(rate_df) + 15
+                summary_sheet[f'A{start_row}'] = '3. 거래구분별 분석'
+                summary_sheet[f'A{start_row}'].font = header_font
+                
                 trade_counts = df['거래구분'].value_counts()
                 trade_df = pd.DataFrame({
                     '거래구분': trade_counts.index,
-                    '건수': trade_counts.values
+                    '건수': trade_counts.values,
+                    '비율': (trade_counts.values / len(df) * 100).round(1)
                 })
-                trade_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + len(rate_df) + 4)
+                
+                # 헤더 추가
+                for col, header in enumerate(['거래구분', '건수', '비율(%)'], start=0):
+                    cell = summary_sheet.cell(row=start_row+1, column=col+1)
+                    cell.value = header
+                    cell.font = header_font
+                
+                # 데이터 추가
+                for idx, row in enumerate(trade_df.itertuples(), start=start_row+2):
+                    summary_sheet[f'A{idx}'] = row.거래구분
+                    summary_sheet[f'B{idx}'] = row.건수
+                    summary_sheet[f'C{idx}'] = row.비율
+                    summary_sheet[f'A{idx}'].font = normal_font
+                    summary_sheet[f'B{idx}'].font = normal_font
+                    summary_sheet[f'C{idx}'].font = normal_font
             
+            # 시계열 분석 섹션
             if '수리일자' in df.columns:
                 try:
+                    start_row = len(trade_df) + start_row + 3
+                    summary_sheet[f'A{start_row}'] = '4. 시계열 분석'
+                    summary_sheet[f'A{start_row}'].font = header_font
+                    
                     df['수리일자_converted'] = pd.to_datetime(df['수리일자'], errors='coerce')
                     if df['수리일자_converted'].notna().sum() > 0:
                         daily_counts = df.groupby(df['수리일자_converted'].dt.date).size()
@@ -824,9 +888,34 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
                             '날짜': daily_counts.index,
                             '건수': daily_counts.values
                         })
-                        time_df.to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_data) + len(rate_df) + len(trade_df) + 6)
+                        
+                        # 헤더 추가
+                        for col, header in enumerate(['날짜', '건수'], start=0):
+                            cell = summary_sheet.cell(row=start_row+1, column=col+1)
+                            cell.value = header
+                            cell.font = header_font
+                        
+                        # 데이터 추가
+                        for idx, row in enumerate(time_df.itertuples(), start=start_row+2):
+                            summary_sheet[f'A{idx}'] = row.날짜
+                            summary_sheet[f'B{idx}'] = row.건수
+                            summary_sheet[f'A{idx}'].font = normal_font
+                            summary_sheet[f'B{idx}'].font = normal_font
                 except:
                     pass
+            
+            # 열 너비 자동 조정
+            for column in summary_sheet.columns:
+                max_length = 0
+                column = column[0]
+                for cell in summary_sheet[column]:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2)
+                summary_sheet.column_dimensions[column].width = adjusted_width
             
             # 2. 8% 환급 검토 시트
             if len(eight_percent_df) > 0:
@@ -840,8 +929,14 @@ def create_comprehensive_excel_report(df, eight_percent_df, zero_risk_df, tariff
             if len(tariff_risk_df) > 0:
                 tariff_risk_df.to_excel(writer, sheet_name='세율 Risk', index=False)
             
-            # 5. 단가 Risk 시트
+            # 5. 단가 Risk 시트 - 수입신고번호를 A열로 이동
             if len(price_risk_df) > 0:
+                # 수입신고번호 컬럼을 가장 앞으로 이동
+                cols = price_risk_df.columns.tolist()
+                if '수입신고번호' in cols:
+                    cols.remove('수입신고번호')
+                    cols.insert(0, '수입신고번호')
+                    price_risk_df = price_risk_df[cols]
                 price_risk_df.to_excel(writer, sheet_name='단가 Risk', index=False)
             
             # 6. 전체 데이터 시트
