@@ -378,7 +378,7 @@ def create_tariff_risk_analysis(df):
         
         # 필요한 컬럼 체크
         required_columns = [
-            '수입신고번호', '수리일자', '규격1', '규격2', '규격3',
+            '수입신고번호', 'B/L번호', '수리일자', '규격1', '규격2', '규격3',
             '성분1', '성분2', '성분3', '세번부호', '세율구분', '세율설명',
             '과세가격달러', '실제관세액', '결제방법'
         ]
@@ -525,14 +525,15 @@ def create_price_risk_analysis(df):
         agg_dict = {
             '단가': ['mean', 'max', 'min', 'std', 'count'],
             '수입신고번호': ['min', 'max'],
-            '결제통화단위': 'first'
+            '결제통화단위': 'first',
+            'B/L번호': 'first',
+            '거래품명': 'first',
+            '란번호': 'first',
+            '행번호': 'first',
+            '수량_1': 'first',
+            '수량단위_1': 'first',
+            '금액': 'sum'
         }
-        
-        # 추가 컬럼들도 포함
-        additional_cols = ['거래품명', '란번호', '행번호', '수량_1', '수량단위_1', '금액']
-        for col in additional_cols:
-            if col in df_work.columns:
-                agg_dict[col] = 'first'
         
         grouped = df_work.groupby(group_columns).agg(agg_dict).reset_index()
         
@@ -558,6 +559,8 @@ def create_price_risk_analysis(df):
                     new_columns.append('Max신고번호')
                 elif col[0] == '결제통화단위' and col[1] == 'first':
                     new_columns.append('결제통화단위')
+                elif col[0] == 'B/L번호' and col[1] == 'first':
+                    new_columns.append('B/L번호')
                 else:
                     new_columns.append(f'{col[0]}_{col[1]}')
             else:
