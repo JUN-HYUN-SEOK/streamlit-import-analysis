@@ -527,6 +527,7 @@ def create_price_risk_analysis(df):
             '수입신고번호': ['min', 'max'],
             '결제통화단위': 'first',
             'B/L번호': 'first',
+            '수리일자': 'first',
             '거래품명': 'first',
             '란번호': 'first',
             '행번호': 'first',
@@ -561,6 +562,8 @@ def create_price_risk_analysis(df):
                     new_columns.append('결제통화단위')
                 elif col[0] == 'B/L번호' and col[1] == 'first':
                     new_columns.append('B/L번호')
+                elif col[0] == '수리일자' and col[1] == 'first':
+                    new_columns.append('수리일자')
                 else:
                     new_columns.append(f'{col[0]}_{col[1]}')
             else:
