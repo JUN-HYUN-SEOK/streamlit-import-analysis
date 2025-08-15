@@ -13,7 +13,7 @@ import xlsxwriter
 
 # 페이지 설정
 st.set_page_config(
-    page_title="수입신고 분석 도구 v2", 
+    page_title="[관세법인우신] 수입신고 Risk Management System v2",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -250,58 +250,7 @@ def create_excel_report(df, analysis_results):
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             
-            # 8% 환급 검토 시트
-            if "8% 환급 검토" in analysis_results and analysis_results["8% 환급 검토"][0] is not None:
-                df_eight = analysis_results["8% 환급 검토"][0]
-                df_eight.to_excel(writer, sheet_name='8% 환급 검토', index=False)
-                
-                worksheet = writer.sheets['8% 환급 검토']
-                header_format = workbook.add_format({
-                    'bold': True,
-                    'bg_color': '#D9E1F2',
-                    'border': 1,
-                    'align': 'center'
-                })
-                
-                for col_num, value in enumerate(df_eight.columns.values):
-                    worksheet.write(0, col_num, value, header_format)
-            
-            # 0% Risk 시트
-            if "0% Risk 분석" in analysis_results and analysis_results["0% Risk 분석"][0] is not None:
-                df_zero = analysis_results["0% Risk 분석"][0]
-                df_zero.to_excel(writer, sheet_name='0% Risk', index=False)
-                
-                worksheet = writer.sheets['0% Risk']
-                header_format = workbook.add_format({
-                    'bold': True,
-                    'bg_color': '#D9E1F2',
-                    'border': 1,
-                    'align': 'center'
-                })
-                
-                for col_num, value in enumerate(df_zero.columns.values):
-                    worksheet.write(0, col_num, value, header_format)
-            
-            # 세율 Risk 시트
-            if "세율 Risk 분석" in analysis_results and analysis_results["세율 Risk 분석"][0] is not None:
-                df_tariff = analysis_results["세율 Risk 분석"][0]
-                df_tariff.to_excel(writer, sheet_name='세율 Risk', index=False)
-                
-                worksheet = writer.sheets['세율 Risk']
-                header_format = workbook.add_format({
-                    'bold': True,
-                    'bg_color': '#D9E1F2',
-                    'border': 1,
-                    'align': 'center'
-                })
-                
-                for col_num, value in enumerate(df_tariff.columns.values):
-                    worksheet.write(0, col_num, value, header_format)
-            
-            # 원본 데이터 시트
-            df.to_excel(writer, sheet_name='원본데이터', index=False)
-            
-            worksheet = writer.sheets['원본데이터']
+            # 헤더 포맷 정의
             header_format = workbook.add_format({
                 'bold': True,
                 'bg_color': '#D9E1F2',
@@ -309,14 +258,46 @@ def create_excel_report(df, analysis_results):
                 'align': 'center'
             })
             
-            for col_num, value in enumerate(df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
+            # 분석 결과 시트들 생성
+            sheet_count = 0
+            
+            # 8% 환급 검토 시트
+            if ("8% 환급 검토" in analysis_results and 
+                analysis_results["8% 환급 검토"][0] is not None and
+                not analysis_results["8% 환급 검토"][0].empty):
+                df_eight = analysis_results["8% 환급 검토"][0]
+                df_eight.to_excel(writer, sheet_name='8% 환급 검토', index=False)
+                sheet_count += 1
+            
+            # 0% Risk 시트
+            if ("0% Risk 분석" in analysis_results and 
+                analysis_results["0% Risk 분석"][0] is not None and
+                not analysis_results["0% Risk 분석"][0].empty):
+                df_zero = analysis_results["0% Risk 분석"][0]
+                df_zero.to_excel(writer, sheet_name='0% Risk', index=False)
+                sheet_count += 1
+            
+            # 세율 Risk 시트
+            if ("세율 Risk 분석" in analysis_results and 
+                analysis_results["세율 Risk 분석"][0] is not None and
+                not analysis_results["세율 Risk 분석"][0].empty):
+                df_tariff = analysis_results["세율 Risk 분석"][0]
+                df_tariff.to_excel(writer, sheet_name='세율 Risk', index=False)
+                sheet_count += 1
+            
+            # 원본 데이터 시트 (항상 포함)
+            df_sample = df.head(1000)  # 처음 1000행만
+            df_sample.to_excel(writer, sheet_name='원본데이터', index=False)
+            sheet_count += 1
+            
+            st.info(f"총 {sheet_count}개 시트가 생성되었습니다.")
         
         output.seek(0)
-        return output
+        return output.getvalue()
         
     except Exception as e:
         st.error(f"엑셀 보고서 생성 중 오류 발생: {str(e)}")
+        st.error(f"상세 오류: {traceback.format_exc()}")
         return None
 
 def create_word_report(analysis_results):
@@ -328,37 +309,54 @@ def create_word_report(analysis_results):
         doc.add_heading('수입신고 분석 보고서', 0)
         doc.add_paragraph(datetime.datetime.now().strftime("%Y년 %m월 %d일"))
         
+        # 분석 결과 요약
+        doc.add_heading('분석 결과 요약', level=1)
+        summary_para = doc.add_paragraph()
+        
         # 각 분석 결과 추가
         for analysis_name, (data, message) in analysis_results.items():
-            doc.add_heading(analysis_name, level=1)
+            doc.add_heading(analysis_name, level=2)
             doc.add_paragraph(message)
             
-            if data is not None and len(data) > 0:
-                # 상위 10개만 테이블로 표시
-                table_data = data.head(10)
-                if len(table_data) > 0:
-                    table = doc.add_table(rows=len(table_data)+1, cols=len(table_data.columns))
-                    table.style = 'Table Grid'
-                    
-                    # 헤더 추가
-                    for j, column in enumerate(table_data.columns):
-                        table.cell(0, j).text = str(column)
-                    
-                    # 데이터 추가
-                    for i, row in enumerate(table_data.values):
-                        for j, value in enumerate(row):
-                            table.cell(i+1, j).text = str(value)
-                    
-                    doc.add_paragraph("※ 상위 10건만 표시됨", style='Intense Quote')
+            if analysis_name == "Summary":
+                # Summary는 특별 처리
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        doc.add_paragraph(f"{key}: {value}", style='List Bullet')
+            elif data is not None and hasattr(data, 'head') and len(data) > 0:
+                # 데이터프레임인 경우 상위 5개만 테이블로 표시
+                table_data = data.head(5)
+                if len(table_data) > 0 and len(table_data.columns) <= 10:  # 컬럼이 너무 많으면 제외
+                    try:
+                        table = doc.add_table(rows=len(table_data)+1, cols=len(table_data.columns))
+                        table.style = 'Table Grid'
+                        
+                        # 헤더 추가
+                        for j, column in enumerate(table_data.columns):
+                            table.cell(0, j).text = str(column)[:20]  # 컬럼명 길이 제한
+                        
+                        # 데이터 추가
+                        for i, row in enumerate(table_data.values):
+                            for j, value in enumerate(row):
+                                cell_value = str(value)[:30] if value is not None else ""  # 셀 값 길이 제한
+                                table.cell(i+1, j).text = cell_value
+                        
+                        doc.add_paragraph("※ 상위 5건만 표시됨")
+                    except Exception as table_error:
+                        doc.add_paragraph(f"테이블 생성 실패: {str(table_error)}")
+                        doc.add_paragraph(f"데이터 건수: {len(data)}건")
+                else:
+                    doc.add_paragraph(f"데이터 건수: {len(data)}건 (테이블 표시 생략)")
         
         # 메모리에 저장
         output = io.BytesIO()
         doc.save(output)
         output.seek(0)
-        return output
+        return output.getvalue()
         
     except Exception as e:
         st.error(f"워드 보고서 생성 중 오류 발생: {str(e)}")
+        st.error(f"상세 오류: {traceback.format_exc()}")
         return None
 
 # 메인 로직
@@ -446,26 +444,38 @@ if uploaded_file is not None:
             col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("📊 엑셀 보고서 다운로드"):
+                st.subheader("📊 엑셀 보고서")
+                with st.spinner("엑셀 보고서 생성 중..."):
                     excel_data = create_excel_report(df, analysis_results)
-                    if excel_data:
-                        st.download_button(
-                            label="📊 엑셀 파일 다운로드",
-                            data=excel_data,
-                            file_name=f"수입신고분석_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
+                
+                if excel_data:
+                    st.download_button(
+                        label="📊 엑셀 파일 다운로드",
+                        data=excel_data,
+                        file_name=f"수입신고분석_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="excel_download"
+                    )
+                    st.success("엑셀 보고서가 준비되었습니다!")
+                else:
+                    st.error("엑셀 보고서 생성에 실패했습니다.")
             
             with col2:
-                if st.button("📝 워드 보고서 다운로드"):
+                st.subheader("📝 워드 보고서")
+                with st.spinner("워드 보고서 생성 중..."):
                     word_data = create_word_report(analysis_results)
-                    if word_data:
-                        st.download_button(
-                            label="📝 워드 파일 다운로드",
-                            data=word_data,
-                            file_name=f"수입신고분석_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
+                
+                if word_data:
+                    st.download_button(
+                        label="📝 워드 파일 다운로드",
+                        data=word_data,
+                        file_name=f"수입신고분석_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="word_download"
+                    )
+                    st.success("워드 보고서가 준비되었습니다!")
+                else:
+                    st.error("워드 보고서 생성에 실패했습니다.")
 
 else:
     st.info("👆 분석할 엑셀 파일을 업로드해주세요.")
