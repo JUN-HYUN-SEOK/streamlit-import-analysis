@@ -51,25 +51,53 @@ uploaded_file = st.file_uploader(
 def read_excel_file(file):
     """엑셀 파일 읽기"""
     try:
+        # Streamlit 업로드 파일 처리
         df = pd.read_excel(file)
-        df.columns = df.columns.str.strip()  # 컬럼 이름의 공백 제거
         
-        # 컬럼 매핑
-        if len(df.columns) > 71:
-            df.rename(columns={
-                df.columns[70]: '세율구분',
-                df.columns[71]: '관세실행세율'
-            }, inplace=True)
+        # 컬럼 이름 정리
+        df.columns = [str(col).strip() for col in df.columns]
         
-        # 관세실행세율 컬럼을 숫자형으로 변환
-        if '관세실행세율' in df.columns:
-            df['관세실행세율'] = pd.to_numeric(
-                df['관세실행세율'].fillna(0), errors='coerce'
-            ).fillna(0)
+        st.info(f"데이터 로드 완료: {df.shape[0]}행, {df.shape[1]}열")
+        
+        # 컬럼 매핑 - 기존 컬럼명이 있는지 먼저 확인
+        if '세율구분' not in df.columns and '관세실행세율' not in df.columns:
+            # 컬럼 인덱스 기반 매핑 시도
+            if len(df.columns) > 71:
+                try:
+                    df = df.rename(columns={
+                        df.columns[70]: '세율구분',
+                        df.columns[71]: '관세실행세율'
+                    })
+                    st.info("컬럼 매핑 완료: 인덱스 기반")
+                except Exception as e:
+                    st.warning(f"컬럼 매핑 실패: {str(e)}")
+            else:
+                st.warning(f"컬럼 수 부족. 현재: {len(df.columns)}개")
+        
+        # 필수 컬럼이 없으면 기본값으로 생성
+        if '관세실행세율' not in df.columns:
+            st.warning("관세실행세율 컬럼이 없어 기본값(0)으로 생성합니다.")
+            df['관세실행세율'] = 0
+        else:
+            # 숫자형으로 변환
+            df['관세실행세율'] = pd.to_numeric(df['관세실행세율'], errors='coerce').fillna(0)
+        
+        if '세율구분' not in df.columns:
+            st.warning("세율구분 컬럼이 없어 기본값('A')으로 생성합니다.")
+            df['세율구분'] = 'A'
+        
+        # 기타 필요한 컬럼들도 기본값으로 생성
+        required_columns = ['수입신고번호', '규격1', '세번부호', '거래구분']
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = f'기본값_{col}'
+                st.info(f"'{col}' 컬럼이 없어 기본값으로 생성했습니다.")
         
         return df
+        
     except Exception as e:
         st.error(f"엑셀 파일 읽기 실패: {str(e)}")
+        st.error(f"오류 상세: {traceback.format_exc()}")
         return None
 
 def process_data(df):
@@ -335,9 +363,19 @@ def create_word_report(analysis_results):
 
 # 메인 로직
 if uploaded_file is not None:
+    st.info(f"업로드된 파일: {uploaded_file.name}")
+    st.info(f"파일 크기: {uploaded_file.size} bytes")
+    
     # 데이터 로드
     with st.spinner("파일을 읽는 중..."):
-        df = read_excel_file(uploaded_file)
+        try:
+            # 파일 포인터를 처음으로 이동
+            uploaded_file.seek(0)
+            df = read_excel_file(uploaded_file)
+        except Exception as e:
+            st.error(f"파일 읽기 중 오류 발생: {str(e)}")
+            st.error(f"오류 상세: {traceback.format_exc()}")
+            df = None
     
     if df is not None:
         st.success(f"✅ 파일 로드 완료: {len(df):,}행, {len(df.columns)}열")
@@ -345,7 +383,9 @@ if uploaded_file is not None:
         # 데이터 미리보기
         with st.expander("📊 데이터 미리보기"):
             st.dataframe(df.head(10))
-            st.info(f"컬럼 목록: {', '.join(df.columns.tolist())}")
+            st.info(f"컬럼 목록 (처음 20개): {', '.join(df.columns.tolist()[:20])}")
+            if len(df.columns) > 20:
+                st.info(f"... 총 {len(df.columns)}개 컬럼")
         
         # 분석 실행
         if st.button("🔍 분석 시작", type="primary"):
