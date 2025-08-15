@@ -13,13 +13,13 @@ import xlsxwriter
 
 # 페이지 설정
 st.set_page_config(
-    page_title="[관세법인우신] 수입신고 Risk Management System v2",
+    page_title="[관세법인우신] Import Declaration Risk Management System v2",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # 제목과 설명
-st.title("🚢 수입신고 분석 도구 v2")
+st.title("🚢 [관세법인우신] 수입신고 Risk Management System v2")
 st.markdown("""
 이 도구는 수입신고 데이터를 분석하여 다음과 같은 리포트를 생성합니다:
 - **8% 환급 검토**: 환급 대상 분석
