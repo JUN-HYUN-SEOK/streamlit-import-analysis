@@ -1,87 +1,112 @@
-# 🚢 수입신고 분석 도구 (완전판)
+# 📊 수입신고 RISK 분석 시스템
 
-원본 `app-new202505.py`의 모든 분석 기능을 웹으로 구현한 완전판 스트림릿 애플리케이션입니다.
+수입신고 RAW 데이터를 분석하여 다양한 Risk를 식별하고 리포트를 생성하는 Streamlit 웹 애플리케이션입니다.
 
-## 🎯 주요 기능
+## 🚀 주요 기능
 
-### 📊 분석 기능
-- **8% 환급 검토**: 세율구분='A' AND 관세실행세율≥8% 조건 분석
-- **0% Risk 분석**: 관세실행세율<8% AND 세율구분≠F*** 조건 리스크 분석
-- **세율 Risk 분석**: 동일 규격1에 대해 서로 다른 세번부호가 적용된 경우
-- **단가 Risk 분석**: 동일 조건에서 단가 편차가 큰 경우 분석
-- **종합 요약**: 모든 분석 결과의 통계 및 시각화
+### 📋 분석 유형
+- **Summary**: 전체적인 분석 요약 및 통계
+- **8% 환급 검토**: 8% 이상 관세율에 대한 환급 검토 대상 분석(FTA 세율은 고려하지 않음.)
+- **0% Risk**: 낮은 관세율 Risk 분석(예: 세번이 잘못되어 CIT 0%로 가지 않았을까?)
+- **세율 Risk**: 세번부호 불일치 위험 분석 (동일 규격1인데 2가지 이상의 HS CODE로 분류)
+- **단가 Risk**: 단가 변동성 위험 분석 (동일 규격인데 단가 차이가 나는 건)
 
-### 💡 특징
-- 🔄 **원본 코드 완전 구현**: `app-new202505.py`와 동일한 분석 로직
-- 📊 **실시간 차트**: Plotly를 활용한 인터랙티브 시각화
-- 📥 **다중 다운로드**: 각 분석별 개별 엑셀 다운로드 지원
-- 🛡️ **안전한 처리**: robust한 오류 처리 및 데이터 검증
-- 🎨 **직관적 UI**: 사용자 친화적인 웹 인터페이스
+### 💾 출력 형식
+- **Excel 파일**: 모든 분석 결과를 시트별로 정리
+- **Word 문서**: 분석 결과 요약 보고서
 
-## 🚀 사용 방법
+## 📦 설치 및 실행
 
-### 온라인 사용 (추천)
-**🌐 [여기서 바로 사용하기](https://your-app-url.streamlit.app)**
-
-### 로컬 실행
+### 1. 패키지 설치
 ```bash
-# 1. 저장소 복제
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
-
-# 2. 패키지 설치
 pip install -r requirements.txt
-
-# 3. 앱 실행
-streamlit run app_enhanced.py
 ```
 
-## 📋 분석 조건
+### 2. 로컬 실행
+```bash
+streamlit run streamlit_app.py
+```
 
-### 🎯 8% 환급 검토
-- **조건**: 세율구분 = 'A' AND 관세실행세율 ≥ 8%
-- **목적**: 환급 검토가 필요한 항목 식별
+### 3. 웹 브라우저에서 접속
+자동으로 브라우저가 열리거나 `http://localhost:8501`로 직접 접속하세요.
 
-### ⚠️ 0% Risk 분석
-- **조건**: 관세실행세율 < 8% AND 세율구분이 F로 시작하는 4자리가 아님
-- **목적**: 관세 리스크가 있는 항목 식별
+## 🌐 배포 옵션
 
-### 📊 세율 Risk 분석
-- **조건**: 규격1당 세번부호 수 > 1
-- **목적**: 동일 규격에 대해 다른 세번부호가 적용된 경우
+### Streamlit Cloud (무료)
+1. GitHub에 코드 업로드
+2. [share.streamlit.io](https://share.streamlit.io)에서 배포
+3. GitHub 저장소 연결
 
-### 💰 단가 Risk 분석
-- **조건**: 그룹별 단가 편차율 > 30%
-- **목적**: 동일 조건에서 단가 차이가 큰 경우
+### Heroku
+1. `Procfile` 생성:
+```
+web: sh setup.sh && streamlit run streamlit_app.py --server.port=$PORT --server.address=0.0.0.0
+```
 
-## 📁 파일 형식
+2. `setup.sh` 생성:
+```bash
+mkdir -p ~/.streamlit/
 
-### 입력 파일
-- **지원 형식**: `.xlsx`, `.csv`
-- **필수 컬럼**: 70번째 컬럼(세율구분), 71번째 컬럼(관세실행세율)
-- **추가 컬럼**: 수입신고번호, 세번부호, 규격1, 단가 등
+echo "\
+[general]\n\
+email = \"your-email@domain.com\"\n\
+" > ~/.streamlit/credentials.toml
 
-### 출력 파일
-- **엑셀 형식**: 다중 시트 지원
-- **개별 다운로드**: 각 분석별 별도 파일
-- **종합 리포트**: 모든 분석을 포함한 통합 파일
+echo "\
+[server]\n\
+headless = true\n\
+enableCORS=false\n\
+port = $PORT\n\
+" > ~/.streamlit/config.toml
+```
 
-## 🛠️ 기술 스택
+### Railway/Render
+`requirements.txt`와 함께 배포하면 자동으로 인식됩니다.
 
-- **Frontend**: Streamlit
-- **Backend**: Python, Pandas
-- **Visualization**: Plotly
-- **File Processing**: openpyxl
-- **Deployment**: Streamlit Community Cloud
+## 📊 사용법
 
-## 📞 지원
+1. **파일 업로드**: 분석할 수입신고 데이터가 포함된 엑셀 파일을 업로드
+2. **분석 옵션 선택**: 사이드바에서 원하는 분석 유형 선택
+3. **분석 실행**: '분석 시작' 버튼 클릭
+4. **결과 확인**: 탭에서 분석 결과 확인
+5. **파일 다운로드**: Excel 및 Word 형태로 결과 다운로드
 
-문제가 발생하거나 기능 개선 요청이 있으시면 Issues를 통해 연락해주세요.
+## 📁 파일 구조
 
-## 📄 라이선스
+```
+Streamlit202508/
+├── streamlit_app.py          # 메인 애플리케이션
+├── requirements.txt          # 패키지 의존성
+├── .streamlit/
+│   └── config.toml          # Streamlit 설정
+├── README.md                # 이 파일
+└── app-new202505-v3.py     # 원본 tkinter 버전 (참고용)
+```
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+## 🔧 시스템 요구사항
 
----
+- Python 3.7 이상
+- 메모리: 최소 512MB (권장: 1GB 이상)
+- 업로드 파일 크기: 최대 1000MB
 
-**📊 Made with ❤️ for 수입신고 분석** 
+## 📝 주의사항
+
+- 대용량 파일 처리 시 시간이 소요될 수 있습니다
+- 인터넷 연결이 필요합니다 (배포된 버전 사용 시)
+- 데이터 보안을 위해 민감한 정보는 로컬에서만 처리하는 것을 권장합니다
+
+## 🆘 문제 해결
+
+### 일반적인 오류
+1. **패키지 설치 오류**: `pip install --upgrade pip` 후 재시도
+2. **메모리 부족**: 작은 데이터셋으로 테스트 후 점진적으로 크기 증가
+3. **업로드 오류**: 파일 형식이 .xlsx 또는 .xls인지 확인
+
+### 성능 최적화
+- 대용량 파일은 필요한 분석만 선택하여 실행
+- 브라우저 캐시 정리로 성능 개선 가능
+
+## 🔄 업데이트 이력
+
+- **v1.0**: 초기 Streamlit 버전 릴리스
+- 기존 tkinter 기반 데스크톱 앱을 웹 애플리케이션으로 전환
